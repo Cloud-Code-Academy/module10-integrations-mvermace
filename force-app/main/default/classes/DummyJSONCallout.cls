@@ -35,17 +35,21 @@ public with sharing class DummyJSONCallout {
      */
 
 	public static void getDummyJSONUserFromId(String dummyUserId) {
-		// Create HTTP request to send.
+		
+		Http dummyHttp = new Http();									// Create HTTP request to send.
 
-		// Set the endpoint URL. Use direct URL or for best practices use Named Credential.
+		HttpRequest dummyRequest = new HttpRequest();
+		dummyRequest.setEndpoint('callout:DummyJsonUser');				// Set the endpoint URL. Use direct URL or for best practices use Named Credential.
+		dummyRequest.setMethod('GET');									// Set the HTTP method to GET.
 
-		// Set the HTTP method to GET.
+		HttpResponse dummyResponse = dummyHttp.send(dummyRequest);		// Send the HTTP request and get the response.
 
-		// Send the HTTP request and get the response.
+		if (dummyResponse.getStatusCode() == 200) {	
+			createContactFromJson(dummResponse.getBody());				// If the HTTP response code is successful, parse the JSON response and update the contact.
+		} else {
+			System.debug('Response error code: ' + dummyResponse.getStatusCode()());
+		}
 
-		// If the HTTP response code is successful, parse the JSON response and update the contact.
-		Contact cont = null;
-		upsert cont DummyJSON_Id__c; //insert/update from the JSON response using the external id (dummyUserId)
 	}
 
 	/* 
@@ -66,10 +70,9 @@ public with sharing class DummyJSONCallout {
 	@TestVisible // Allows test class to see this method. Since it is private, it would not be visible otherwise.
 	private static Contact createContactFromJson(String jsonResponse) {
 		// Deserialize the JSON string into map of primitive data types.
-
+		String primString = JSON.deserialize(jsonString);
 		// Create a new contact from the JSON response.
-
-		// Set the contact fields from the JSON response.
+				// Set the contact fields from the JSON response.
 
 		// Deserialize the address from the JSON response.
 

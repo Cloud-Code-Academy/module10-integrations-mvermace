@@ -5,6 +5,12 @@
 // You can also execute the entire file by running the command:
 //     SFDX: Execute Anonymous Apex with Editor Contents
 
-string tempvar = 'Enter_your_name_here';
-System.debug('Hello World!');
-System.debug('My name is ' + tempvar);
+Contact c = new Contact();
+c.FirstName = 'mike';
+c.LastName = 'test44';
+//insert c;
+
+Database.DMLOptions dml = new Database.DMLOptions();
+dml.DuplicateRuleHeader.allowSave = true;
+dml.DuplicateRuleHeader.runAsCurrentUser = true;
+Database.insert(c, dml);

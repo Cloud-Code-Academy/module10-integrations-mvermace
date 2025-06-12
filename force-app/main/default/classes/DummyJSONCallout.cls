@@ -33,21 +33,28 @@ public with sharing class DummyJSONCallout {
 	 * 
      * @param dummyUserId The ID of the user in the external system to fetch data for.
      */
-
+	@future(callout=true)
 	public static void getDummyJSONUserFromId(String dummyUserId) {
 		
-		Http dummyHttp = new Http();									// Create HTTP request to send.
+		System.debug('dummyUserId in @future :' + dummyUserId);
+		
+		if (dummyUserId == null) { return; }
+		
+		Http dummyHttp = new Http();										// Create HTTP request to send.
 
 		HttpRequest dummyRequest = new HttpRequest();
-		dummyRequest.setEndpoint('callout:DummyJsonUser');				// Set the endpoint URL. Use direct URL or for best practices use Named Credential.
-		dummyRequest.setMethod('GET');									// Set the HTTP method to GET.
+		dummyRequest.setEndpoint('callout:DummyJsonUser/' + 'user/' + dummyUserId);
+		dummyRequest.setMethod('GET');										// Set the HTTP method to GET.
+		
+		string s = dummyRequest.getEndpoint();
+		System.debug('getEndPoint(): ' + s);
 
-		HttpResponse dummyResponse = dummyHttp.send(dummyRequest);		// Send the HTTP request and get the response.
+		HttpResponse dummyResponse = dummyHttp.send(dummyRequest);			// Send the HTTP request and get the response.
 
 		if (dummyResponse.getStatusCode() == 200) {	
-			createContactFromJson(dummResponse.getBody());				// If the HTTP response code is successful, parse the JSON response and update the contact.
+			createContactFromJson(dummyResponse.getBody());					// If the HTTP response code is successful, parse the JSON response and update the contact.
 		} else {
-			System.debug('Response error code: ' + dummyResponse.getStatusCode()());
+			System.debug('Response error code: ' + dummyResponse.getStatusCode());
 		}
 
 	}
@@ -69,16 +76,33 @@ public with sharing class DummyJSONCallout {
      */
 	@TestVisible // Allows test class to see this method. Since it is private, it would not be visible otherwise.
 	private static Contact createContactFromJson(String jsonResponse) {
-		// Deserialize the JSON string into map of primitive data types.
-		String primString = JSON.deserialize(jsonString);
-		// Create a new contact from the JSON response.
-				// Set the contact fields from the JSON response.
+		
+		Contact cont = new Contact(); 				
 
-		// Deserialize the address from the JSON response.
+		Map<String, Object> mapResponse = (Map<String,Object>)JSON.deserializeUntyped(jsonResponse); // Deserialize the JSON string into map of primitive data types.
+		// cont.FirstName = (String)mapResponse?.get('firstName');
+		// cont.LastName = (String)mapResponse?.get('lastName');
+		cont.Birthdate = Utilities.convertStringToDate((String)mapResponse?.get('birthDate'));		
+		cont.Email = (String)mapResponse?.get('email');
+		cont.Phone = (String)mapResponse?.get('phone');
 
-		// Set the address fields on the contact.
+		cont.DummyJSON_Last_Updated__c = Datetime.now();
 
-		return null;
+		Map<String, Object> mapAddress = (Map<String,Object>)mapResponse.get('address');  	// Deserialize the address from the JSON response.
+
+		cont.MailingStreet = (String)mapAddress?.get('address');							// Set the address fields on the contact.
+		cont.MailingCity = (String)mapAddress?.get('city');
+		cont.MailingState = (String)mapAddress?.get('stateCode');
+		cont.MailingPostalCode = (String)mapAddress?.get('postalCode');
+		cont.MailingCountry = (String)mapAddress?.get('country');
+		
+		try {
+			update cont;
+		} catch(DmlException DMLError) {
+			System.debug('An error occurred when inserting a new Contact: ' + DMLError);
+		}
+
+		return cont;
 	}
 
 	/* 

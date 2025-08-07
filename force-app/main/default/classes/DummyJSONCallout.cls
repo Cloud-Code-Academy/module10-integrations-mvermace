@@ -38,12 +38,12 @@ public with sharing class DummyJSONCallout {
 		
 		System.debug('dummyUserId in @future :' + dummyUserId);
 		
-		if (dummyUserId == null) { return; }
+		if (dummyUserId == null || Integer.valueOf(dummyUserId) <= 100) { return; }
 		
 		Http dummyHttp = new Http();										// Create HTTP request to send.
 
 		HttpRequest dummyRequest = new HttpRequest();
-		dummyRequest.setEndpoint('callout:DummyJsonUser/' + 'user/' + dummyUserId);
+		dummyRequest.setEndpoint('callout:DummyJsonUser/user/' + dummyUserId);
 		dummyRequest.setMethod('GET');										// Set the HTTP method to GET.
 		
 		string s = dummyRequest.getEndpoint();
@@ -52,7 +52,7 @@ public with sharing class DummyJSONCallout {
 		HttpResponse dummyResponse = dummyHttp.send(dummyRequest);			// Send the HTTP request and get the response.
 
 		if (dummyResponse.getStatusCode() == 200) {	
-			createContactFromJson(dummyResponse.getBody());					// If the HTTP response code is successful, parse the JSON response and update the contact.
+			Contact cont = createContactFromJson(dummyResponse.getBody());	// If the HTTP response code is successful, parse the JSON response and update the contact.
 		} else {
 			System.debug('Response error code: ' + dummyResponse.getStatusCode());
 		}
@@ -80,8 +80,9 @@ public with sharing class DummyJSONCallout {
 		Contact cont = new Contact(); 				
 
 		Map<String, Object> mapResponse = (Map<String,Object>)JSON.deserializeUntyped(jsonResponse); // Deserialize the JSON string into map of primitive data types.
-		// cont.FirstName = (String)mapResponse?.get('firstName');
-		// cont.LastName = (String)mapResponse?.get('lastName');
+		//System.debug('mapResponse: ' + JSON.serializePretty(mapResponse));
+		cont.FirstName = (String)mapResponse?.get('firstName');
+		cont.LastName = (String)mapResponse?.get('lastName');
 		cont.Birthdate = Utilities.convertStringToDate((String)mapResponse?.get('birthDate'));		
 		cont.Email = (String)mapResponse?.get('email');
 		cont.Phone = (String)mapResponse?.get('phone');
@@ -89,18 +90,13 @@ public with sharing class DummyJSONCallout {
 		cont.DummyJSON_Last_Updated__c = Datetime.now();
 
 		Map<String, Object> mapAddress = (Map<String,Object>)mapResponse.get('address');  	// Deserialize the address from the JSON response.
-
+		//System.debug('mapAddress: ' + JSON.serializePretty(mapAddress));
 		cont.MailingStreet = (String)mapAddress?.get('address');							// Set the address fields on the contact.
 		cont.MailingCity = (String)mapAddress?.get('city');
-		cont.MailingState = (String)mapAddress?.get('stateCode');
 		cont.MailingPostalCode = (String)mapAddress?.get('postalCode');
+		cont.MailingState = (String)mapAddress?.get('stateCode');
 		cont.MailingCountry = (String)mapAddress?.get('country');
-		
-		try {
-			update cont;
-		} catch(DmlException DMLError) {
-			System.debug('An error occurred when inserting a new Contact: ' + DMLError);
-		}
+		//System.debug('cont: ' + JSON.serializePretty(cont));
 
 		return cont;
 	}
@@ -118,20 +114,38 @@ public with sharing class DummyJSONCallout {
      * 
      * @param contactId The Salesforce Contact ID used to generate the JSON payload for the external system.
      */
-	
+	@future(callout=true)
 	public static void postCreateDummyJSONUser(String contactId) {
-		// Create HTTP request to send.
+			
+		// Use Utilities class method to validate 'contactId'
+		if (!Utilities.isIdStringValid(contactId)) { return; }
 
-		// Set the endpoint URL. Use direct URL or for best practices use Named Credential.
+		Contact dummy = [SELECT Id, DummyJSON_Id__c FROM Contact WHERE Id =:contactId];
 
-		// Set the HTTP method to POST.
+		Http dummyPostHttp = new Http();										// Create HTTP request to send.
 
-		// Set the body using generateDummyJsonUserPayload method.
+		HttpRequest dummyPostRequest = new HttpRequest();
+		dummyPostRequest.setEndpoint('callout:DummyJsonUser/users/add/' + dummy.DummyJSON_Id__c);
+		dummyPostRequest.setHeader('Content-Type', 'application/json');
+		dummyPostRequest.setMethod('POST');										// Set the HTTP method to POST.
+		if (generateDummyJsonUserPayload(contactId) == 'invalid JSON') {return;} // Exit callout if JSON is invalid.
 
-		// Send the HTTP request and get the response.
+		dummyPostRequest.setBody(generateDummyJsonUserPayload(contactId));
+		
+		HttpResponse dummyPostResponse = dummyPostHttp.send(dummyPostRequest);	// Send the HTTP request and get the response.
 
-		// If the HTTP response code is successful, update the contact.
-	}
+		if (dummyPostResponse.getStatusCode() >= 200 && dummyPostResponse.getStatusCode() < 300) {	
+			System.debug('dummyPostResponse: ' + dummyPostResponse.getBody());
+			Contact cont = new Contact();
+			cont.Id = contactId;
+			cont.DummyJSON_Last_Updated__c = Date.today();
+			update cont;						// If the HTTP response code is successful, parse the JSON response and update the contact.
+		} else {
+			System.debug('Response error code: ' + dummyPostResponse.getStatusCode());
+		}
+
+	}	
+	
 
 	/*
 	 * Question 4
@@ -150,14 +164,21 @@ public with sharing class DummyJSONCallout {
      */
 	@TestVisible // Allows test class to see this method. Since it is private, it would not be visible otherwise.
 	private static String generateDummyJsonUserPayload(String contactId) {
-		// Query the contact to get the field values to generate the JSON payload.
-
-		// Create a map of the field values.
-
-		// Serialize the map into a JSON string.
-		// Make sure to check that required contacts fields have a value. Default the value to unknown if it does not exists.
-		// Integration data can change over time. It is a best practice to add safeguards/validation to ensure the integration does not break.
-
-		return null;
+		
+		Contact contPost = [SELECT Id, FirstName, LastName, Email, Phone FROM Contact WHERE Id =:contactId];
+		
+		Map<String,String> contPostMap = new Map<String,String>();
+		contPostMap.put('salesforceId', contactId);
+		contPostMap.put('firstName', contPost.FirstName ?? 'unknown');
+		contPostMap.put('lastName', contPost.LastName ?? 'unknown');
+		contPostMap.put('email', contPost?.Email ?? 'unknown');
+		contPostMap.put('phone', contPost?.Phone ?? 'unknown');
+		
+		String contPostJSON = JSON.Serialize(contPostMap);
+		
+		// Use Utilities class method to validate contPostJSON
+		if (!Utilities.isJSONStringValid(contPostJSON)) { return 'invalid JSON'; }
+		
+		return contPostJSON;
 	}
 }

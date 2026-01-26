@@ -26,13 +26,8 @@ public with sharing class ContactTriggerHelper {
             }
         }
 
-        for (Contact cont : IsLessThanEqualTo100) {
-            DummyJSONCallout.getDummyJSONUserFromId(cont.DummyJSON_Id__c);
-        }
 
-        for (Contact cont : IsMoreThan100) {
-            DummyJSONCallout.postCreateDummyJSONUser(cont.Id);
-        }
+
 
     }
 
